@@ -34,7 +34,7 @@ pub struct Histogram {
     fixed_colors: FixedColorsSet,
 
     /// maps RGBA as u32 to (boosted) count
-    hashmap: HashMap<u32, (u32, RGBA), RgbaHasher>,
+    hashmap: HashMap<u64, (u64, RGBA), RgbaHasher>,
     /// how many pixels were counted
     total_area: usize,
 
@@ -200,11 +200,11 @@ impl Histogram {
     fn add_color(&mut self, rgba: RGBA, boost: u16) {
         let px_int = if rgba.a != 0 {
             self.posterize_mask() & unsafe { RGBAInt { rgba }.int }
-        } else { 0 };
+        } else { 0 } as u64;
 
         self.hashmap.entry(px_int)
-            .and_modify(move |e| e.0 += boost as u32)
-            .or_insert((boost as u32, rgba));
+            .and_modify(move |e| e.0 += boost as u64)
+            .or_insert((boost as u64, rgba));
     }
 
     fn reserve(&mut self, entries: usize) {
@@ -224,7 +224,7 @@ impl Histogram {
             return;
         }
         self.posterize_bits = posterize_bits;
-        let new_posterize_mask = self.posterize_mask();
+        let new_posterize_mask = self.posterize_mask() as u64;
 
         let new_size = (self.hashmap.len()/3).max(self.hashmap.capacity()/5);
         let old_hashmap = std::mem::replace(&mut self.hashmap, HashMap::with_capacity_and_hasher(new_size, RgbaHasher(0)));
@@ -375,18 +375,18 @@ impl std::hash::BuildHasher for RgbaHasher {
     }
 }
 
-pub(crate) struct RgbaHasher(pub u32);
+pub(crate) struct RgbaHasher(pub u64);
 impl std::hash::Hasher for RgbaHasher {
     // magic constant from fxhash. For a single 32-bit key that's all it needs!
     #[inline(always)]
     fn finish(&self) -> u64 { (self.0 as u64).wrapping_mul(0x517cc1b727220a95) }
     #[inline(always)]
-    fn write_u32(&mut self, i: u32) { self.0 = i; }
+    fn write_u32(&mut self, i: u32) { self.0 = i as u64; }
+    fn write_u64(&mut self, i: u64) { self.0 = i; }
 
     fn write(&mut self, _bytes: &[u8]) { unimplemented!() }
     fn write_u8(&mut self, _i: u8) { unimplemented!() }
     fn write_u16(&mut self, _i: u16) { unimplemented!() }
-    fn write_u64(&mut self, _i: u64) { unimplemented!() }
     fn write_u128(&mut self, _i: u128) { unimplemented!() }
     fn write_usize(&mut self, _i: usize) { unimplemented!() }
     fn write_i8(&mut self, _i: i8) { unimplemented!() }
